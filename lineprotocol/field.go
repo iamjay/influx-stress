@@ -3,6 +3,7 @@ package lineprotocol
 import (
 	"io"
 	"strconv"
+	"sync/atomic"
 )
 
 var equalSign = byte('=')
@@ -42,10 +43,12 @@ func (i *Int) WriteTo(w io.Writer) (int64, error) {
 
 	// Max int64 fits in 19 base-10 digits,
 	// plus 1 for the leading =, plus 1 for the trailing i required for ints.
-	tmplt := "\"icmp\""
+	//tmplt := "\"icmp\""
 	buf := make([]byte, 0, 21)
 	buf = append(buf, equalSign)
-	buf = append(buf, tmplt...)
+	buf = strconv.AppendInt(buf, atomic.LoadInt64(&i.Value), 10)
+	buf = append(buf, 'i')
+	//buf = append(buf, tmplt...)
 
 	m, err := w.Write(buf)
 

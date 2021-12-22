@@ -4,11 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/influxdata/influx-stress/lineprotocol"
-	"github.com/influxdata/influx-stress/point"
-	"github.com/influxdata/influx-stress/stress"
-	"github.com/influxdata/influx-stress/write"
-	"github.com/spf13/cobra"
 	"math"
 	"os"
 	"strconv"
@@ -16,6 +11,12 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/influxdata/influx-stress/lineprotocol"
+	"github.com/influxdata/influx-stress/point"
+	"github.com/influxdata/influx-stress/stress"
+	"github.com/influxdata/influx-stress/write"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -49,10 +50,13 @@ var insertCmd = &cobra.Command{
 
 func insertRun(cmd *cobra.Command, args []string) {
 	seriesKey := defaultSeriesKey
+	seriesKeyPath := ""
 	fieldStr := defaultFieldStr
 	if len(args) >= 1 {
 		seriesKey = args[0]
-		if !strings.Contains(seriesKey, ",") && !strings.Contains(seriesKey, "=") {
+		if _, err := os.Stat(seriesKey); !errors.Is(err, os.ErrNotExist) {
+			seriesKeyPath = seriesKey
+		} else if !strings.Contains(seriesKey, ",") && !strings.Contains(seriesKey, "=") {
 			fmt.Fprintln(os.Stderr, "First positional argument must be a series key, got: ", seriesKey)
 			cmd.Usage()
 			os.Exit(1)
@@ -95,7 +99,15 @@ func insertRun(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	pts := point.NewPoints(seriesKey, fieldStr, seriesN, lineprotocol.Nanosecond)
+	var pts []lineprotocol.Point
+	if len(seriesKeyPath) > 0 {
+		pts = point.NewPointsFromPath(seriesKeyPath, fieldStr, lineprotocol.Nanosecond)
+		seriesN = len(pts)
+		batchSize = uint64(seriesN)
+		concurrency = 1
+	} else {
+		pts = point.NewPoints(seriesKey, fieldStr, seriesN, lineprotocol.Nanosecond)
+	}
 
 	startSplit := 0
 	inc := int(seriesN) / int(concurrency)
@@ -137,9 +149,12 @@ func insertRun(cmd *cobra.Command, args []string) {
 				Tick:      tick,
 				Results:   sink.Chan(),
 			}
+			if len(seriesKeyPath) > 0 {
+				cfg.MaxPoints = cfg.MaxPoints * uint64(seriesN)
+			}
 
 			// Ignore duration from a single call to Write.
-			pointsWritten, _ := stress.Write(pts[startSplit:endSplit], c, cfg, startTimestampForThread, interval)
+			pointsWritten, _ := stress.Write(pts[startSplit:endSplit], c, cfg, startTimestampForThread, interval, len(seriesKeyPath) > 0)
 			atomic.AddUint64(&totalWritten, pointsWritten)
 
 			wg.Done()

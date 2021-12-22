@@ -1,0 +1,25 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch Package",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceRoot}/cmd/influx-stress",
+            "args": [
+                "insert",
+                "--db", "thirdeye",
+                "-s", "10000",
+                "-n", "1555000000",
+                "series.txt", "fields.txt",
+                //"IcmpMonitor,_host=0509fe3f-e487-5454-85ab-22df0cdef152,_monitorId=1,_network=Default",
+                //"type=icmp",
+                "--host", "http://localhost:8086"
+            ]
+        }
+    ]
+}

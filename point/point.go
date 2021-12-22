@@ -1,6 +1,10 @@
 package point
 
 import (
+	"bufio"
+	"log"
+	"os"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -25,7 +29,7 @@ type point struct {
 }
 
 // New returns a new point without setting the time field.
-func New(sk []byte, ints [1]string, floats []string, p lineprotocol.Precision) *point {
+func New(sk []byte, ints []string, floats []string, p lineprotocol.Precision) *point {
 	fields := []lineprotocol.Field{}
 	e := &point{
 		seriesKey: sk,
@@ -86,9 +90,62 @@ func (p *point) Update() {
 func NewPoints(seriesKey, fields string, seriesN int, pc lineprotocol.Precision) []lineprotocol.Point {
 	pts := []lineprotocol.Point{}
 	series := generateSeriesKeys(seriesKey, seriesN)
-	_, floats := generateFieldSet(fields)
-	ints := [1]string{"type"}
+	ints, floats := generateFieldSet(fields)
+	//ints := [1]string{"type"}
 	for _, sk := range series {
+		p := New(sk, ints, floats, pc)
+		pts = append(pts, p)
+	}
+
+	return pts
+}
+
+func loadFieldsMap(fieldsPath string) (map[string]string, error) {
+	file, err := os.Open(fieldsPath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	fields := map[string]string{}
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.SplitN(scanner.Text(), " ", 2)
+		fields[line[0]] = line[1]
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return fields, nil
+}
+
+func NewPointsFromPath(seriesKeyPath, fieldsPath string, pc lineprotocol.Precision) []lineprotocol.Point {
+	file, err := os.Open(seriesKeyPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	var series [][]byte
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		series = append(series, []byte(scanner.Text()))
+	}
+
+	if err := scanner.Err(); err != nil {
+		log.Fatal(err)
+	}
+
+	fields, err := loadFieldsMap(fieldsPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	pts := []lineprotocol.Point{}
+	for _, sk := range series {
+		ints, floats := generateFieldSet(fields[strings.SplitN(string(sk), ",", 2)[0]])
 		p := New(sk, ints, floats, pc)
 		pts = append(pts, p)
 	}
