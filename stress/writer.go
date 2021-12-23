@@ -41,17 +41,13 @@ type WriteConfig struct {
 // to write data to the target until one of the following conditions is met.
 // 1. We reach that MaxPoints specified in the WriteConfig.
 // 2. We've passed the Deadline specified in the WriteConfig.
-func Write(pts []lineprotocol.Point, c write.Client, cfg WriteConfig, timestamp int64, interval int64, seriesInterval bool) (uint64, time.Duration) {
+func Write(pts []lineprotocol.Point, c write.Client, cfg WriteConfig, timestamp int64, interval int64) (uint64, time.Duration) {
 	if cfg.Results == nil {
 		panic("Results Channel on WriteConfig cannot be nil")
 	}
 	var pointCount uint64
 
-	if seriesInterval {
-		timestamp = timestamp - int64((cfg.MaxPoints/uint64(len(pts)))*uint64(interval*1000000))
-	} else {
-		timestamp = timestamp - int64(cfg.MaxPoints*uint64(interval*1000000))
-	}
+	timestamp = timestamp - int64(cfg.MaxPoints*uint64(interval*1000000))
 
 	start := time.Now()
 	buf := bytes.NewBuffer(nil)
@@ -75,8 +71,6 @@ func Write(pts []lineprotocol.Point, c write.Client, cfg WriteConfig, timestamp 
 
 	//timestamp := time.Now().UnixNano() // set timestamp
 
-	spreadInterval := interval / int64(len(pts))
-
 WRITE_BATCHES:
 	for {
 		if t.After(cfg.Deadline) {
@@ -87,25 +81,12 @@ WRITE_BATCHES:
 			break
 		}
 
-		if seriesInterval {
-			timestamp = timestamp + interval*1000000 // 10 million nanoseconds (every 0.01 second, 100 per second, 360000 per hour, 518 million total points)
-		}
-
 		//println(len(pts)) 500
 		for _, pt := range pts {
 			pointCount++
-			if seriesInterval {
-				timestamp = timestamp + spreadInterval*1000000
-			} else {
-				timestamp = timestamp + interval*1000000 // 10 million nanoseconds (every 0.01 second, 100 per second, 360000 per hour, 518 million total points)
-			}
 			pt.SetTime(time.Unix(0, timestamp))
+			timestamp = timestamp + interval*1000000 // 10 million nanoseconds (every 0.01 second, 100 per second, 360000 per hour, 518 million total points)
 			lineprotocol.WritePoint(w, pt)
-
-			buf := new(bytes.Buffer)
-			lineprotocol.WritePoint(buf, pt)
-			print(buf.String())
-			continue
 
 			if pointCount%cfg.BatchSize == 0 {
 				if doGzip {
@@ -114,6 +95,7 @@ WRITE_BATCHES:
 						panic(err)
 					}
 				}
+
 				sendBatch(c, buf, cfg.Results)
 				if doGzip {
 					// sendBatch already reset the bytes buffer.
@@ -153,6 +135,7 @@ WRITE_BATCHES:
 }
 
 func sendBatch(c write.Client, buf *bytes.Buffer, ch chan<- WriteResult) {
+	//print(buf.String())
 	lat, status, body, err := c.Send(buf.Bytes())
 	buf.Reset()
 	select {

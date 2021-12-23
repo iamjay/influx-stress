@@ -74,6 +74,16 @@ func insertRun(cmd *cobra.Command, args []string) {
 		batchSize = pps
 		concurrency = 1
 	}
+
+	var pts []lineprotocol.Point
+	if len(seriesKeyPath) > 0 {
+		pts = point.NewPointsFromPath(seriesKeyPath, fieldStr, lineprotocol.Nanosecond)
+		seriesN = len(pts)
+		concurrency = 1
+	} else {
+		pts = point.NewPoints(seriesKey, fieldStr, seriesN, lineprotocol.Nanosecond)
+	}
+
 	if !quiet {
 		fmt.Printf("Using point template: %s %s <timestamp>\n", seriesKey, fieldStr)
 		fmt.Printf("Using batch size of %d line(s)\n", batchSize)
@@ -97,16 +107,6 @@ func insertRun(cmd *cobra.Command, args []string) {
 			os.Exit(1)
 			return
 		}
-	}
-
-	var pts []lineprotocol.Point
-	if len(seriesKeyPath) > 0 {
-		pts = point.NewPointsFromPath(seriesKeyPath, fieldStr, lineprotocol.Nanosecond)
-		seriesN = len(pts)
-		batchSize = uint64(seriesN)
-		concurrency = 1
-	} else {
-		pts = point.NewPoints(seriesKey, fieldStr, seriesN, lineprotocol.Nanosecond)
 	}
 
 	startSplit := 0
@@ -149,12 +149,9 @@ func insertRun(cmd *cobra.Command, args []string) {
 				Tick:      tick,
 				Results:   sink.Chan(),
 			}
-			if len(seriesKeyPath) > 0 {
-				cfg.MaxPoints = cfg.MaxPoints * uint64(seriesN)
-			}
 
 			// Ignore duration from a single call to Write.
-			pointsWritten, _ := stress.Write(pts[startSplit:endSplit], c, cfg, startTimestampForThread, interval, len(seriesKeyPath) > 0)
+			pointsWritten, _ := stress.Write(pts[startSplit:endSplit], c, cfg, startTimestampForThread, interval)
 			atomic.AddUint64(&totalWritten, pointsWritten)
 
 			wg.Done()

@@ -29,7 +29,7 @@ type point struct {
 }
 
 // New returns a new point without setting the time field.
-func New(sk []byte, ints []string, floats []string, p lineprotocol.Precision) *point {
+func New(sk []byte, ints [1]string, floats []string, p lineprotocol.Precision) *point {
 	fields := []lineprotocol.Field{}
 	e := &point{
 		seriesKey: sk,
@@ -90,8 +90,9 @@ func (p *point) Update() {
 func NewPoints(seriesKey, fields string, seriesN int, pc lineprotocol.Precision) []lineprotocol.Point {
 	pts := []lineprotocol.Point{}
 	series := generateSeriesKeys(seriesKey, seriesN)
-	ints, floats := generateFieldSet(fields)
-	//ints := [1]string{"type"}
+	//ints, floats := generateFieldSet(fields)
+	_, floats := generateFieldSet(fields)
+	ints := [1]string{"type"}
 	for _, sk := range series {
 		p := New(sk, ints, floats, pc)
 		pts = append(pts, p)
@@ -145,7 +146,9 @@ func NewPointsFromPath(seriesKeyPath, fieldsPath string, pc lineprotocol.Precisi
 
 	pts := []lineprotocol.Point{}
 	for _, sk := range series {
-		ints, floats := generateFieldSet(fields[strings.SplitN(string(sk), ",", 2)[0]])
+		//ints, floats := generateFieldSet(fields[strings.SplitN(string(sk), ",", 2)[0]])
+		_, floats := generateFieldSet(fields[strings.SplitN(string(sk), ",", 2)[0]])
+		ints := [1]string{"type"}
 		p := New(sk, ints, floats, pc)
 		pts = append(pts, p)
 	}
