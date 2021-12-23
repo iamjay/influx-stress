@@ -131,9 +131,9 @@ func insertRun(cmd *cobra.Command, args []string) {
 
 	for i := uint64(0); i < concurrency; i++ {
 
-		startTimestampForThread := startTimestamp - int64((pointsN/concurrency)*uint64(interval*1000000)*i)
+		startTimestampForThread := startTimestamp - int64((pointsN/concurrency)*uint64(interval)*i)
 		fmt.Printf("Start timestamp : " + strconv.FormatInt(int64(i), 10) + " = " + time.Unix(0, startTimestampForThread).String() + ", " + strconv.FormatInt(startTimestampForThread, 10) + "\n")
-		fmt.Printf("Period between two points in milliseconds: " + strconv.FormatInt(interval, 10) + "\n")
+		fmt.Printf("Period between two points in nanoseconds: " + strconv.FormatInt(interval, 10) + "\n")
 		go func(startSplit, endSplit int) {
 			tick := time.Tick(tick)
 
@@ -204,7 +204,7 @@ func init() {
 	insertCmd.Flags().BoolVarP(&strict, "strict", "", true, "Strict mode will exit as soon as an error or unexpected status is encountered")
 	insertCmd.Flags().BoolVarP(&tlsSkipVerify, "tls-skip-verify", "", false, "Skip verify in for TLS")
 	insertCmd.Flags().Int64VarP(&startTimestamp, "start-timestamp", "t", time.Now().UnixNano(), "Start timestamp of insert")
-	insertCmd.Flags().Int64VarP(&interval, "interval", "i", 10, "Interval between two points in milliseconds")
+	insertCmd.Flags().Int64VarP(&interval, "interval", "i", 10, "Interval between two points in nanoseconds")
 }
 
 func client() write.Client {

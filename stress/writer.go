@@ -47,7 +47,7 @@ func Write(pts []lineprotocol.Point, c write.Client, cfg WriteConfig, timestamp 
 	}
 	var pointCount uint64
 
-	timestamp = timestamp - int64(cfg.MaxPoints*uint64(interval*1000000))
+	timestamp = timestamp - int64(cfg.MaxPoints*uint64(interval))
 
 	start := time.Now()
 	buf := bytes.NewBuffer(nil)
@@ -85,7 +85,7 @@ WRITE_BATCHES:
 		for _, pt := range pts {
 			pointCount++
 			pt.SetTime(time.Unix(0, timestamp))
-			timestamp = timestamp + interval*1000000 // 10 million nanoseconds (every 0.01 second, 100 per second, 360000 per hour, 518 million total points)
+			timestamp = timestamp + interval // 10 million nanoseconds (every 0.01 second, 100 per second, 360000 per hour, 518 million total points)
 			lineprotocol.WritePoint(w, pt)
 
 			if pointCount%cfg.BatchSize == 0 {
