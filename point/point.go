@@ -4,9 +4,12 @@ import (
 	"bufio"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	valid "github.com/asaskevich/govalidator"
 
 	"github.com/influxdata/influx-stress/lineprotocol"
 )
@@ -17,8 +20,9 @@ type point struct {
 
 	// Note here that Ints and Floats are exported so they can be modified outside
 	// of the point struct
-	Ints   []*lineprotocol.Int
-	Floats []*lineprotocol.Float
+	Ints    []*lineprotocol.Int
+	Floats  []*lineprotocol.Float
+	Strings []*lineprotocol.String
 
 	// The fields slice should contain exactly Ints and Floats. Having this
 	// slice allows us to avoid iterating through Ints and Floats in the Fields
@@ -29,7 +33,7 @@ type point struct {
 }
 
 // New returns a new point without setting the time field.
-func New(sk []byte, ints [1]string, floats []string, p lineprotocol.Precision) *point {
+func New(sk []byte, ints, floats []string, p lineprotocol.Precision) *point {
 	fields := []lineprotocol.Field{}
 	e := &point{
 		seriesKey: sk,
@@ -37,17 +41,17 @@ func New(sk []byte, ints [1]string, floats []string, p lineprotocol.Precision) *
 		fields:    fields,
 	}
 
-	for _, i := range ints {
-		n := &lineprotocol.Int{Key: []byte(i)}
-		e.Ints = append(e.Ints, n)
-		e.fields = append(e.fields, n)
-	}
-
-	for _, f := range floats {
-		n := &lineprotocol.Float{Key: []byte(f)}
-		e.Floats = append(e.Floats, n)
-		e.fields = append(e.fields, n)
-	}
+	//for _, i := range ints {
+	//	n := &lineprotocol.Int{Key: []byte(i)}
+	//	e.Ints = append(e.Ints, n)
+	//	e.fields = append(e.fields, n)
+	//}
+	//
+	//for _, f := range floats {
+	//	n := &lineprotocol.Float{Key: []byte(f)}
+	//	e.Floats = append(e.Floats, n)
+	//	e.fields = append(e.fields, n)
+	//}
 
 	return e
 }
@@ -90,11 +94,34 @@ func (p *point) Update() {
 func NewPoints(seriesKey, fields string, seriesN int, pc lineprotocol.Precision) []lineprotocol.Point {
 	pts := []lineprotocol.Point{}
 	series := generateSeriesKeys(seriesKey, seriesN)
-	//ints, floats := generateFieldSet(fields)
-	_, floats := generateFieldSet(fields)
-	ints := [1]string{"type"}
+	ints, floats := generateFieldSet(fields)
+	s := strings.Split(fields, ",")
 	for _, sk := range series {
 		p := New(sk, ints, floats, pc)
+
+		for _, field := range s {
+			keyValue := strings.Split(field, "=")
+			key := keyValue[0]
+			strValue := keyValue[1]
+
+			if strings.HasSuffix(strValue, "i") {
+				value, _ := strconv.ParseInt(strings.TrimSuffix(strValue, "i"), 10, 64)
+				intField := &lineprotocol.Int{Key: []byte(key), Value: value}
+				p.Ints = append(p.Ints, intField)
+				p.fields = append(p.fields, intField)
+			} else if valid.IsFloat(strValue) {
+				value, _ := strconv.ParseFloat(strValue, 64)
+				floatField := &lineprotocol.Float{Key: []byte(key), Value: value}
+				p.Floats = append(p.Floats, floatField)
+				p.fields = append(p.fields, floatField)
+			} else {
+				strValueWithQuotes := "\"" + strValue + "\""
+				stringField := &lineprotocol.String{Key: []byte(key), Value: strValueWithQuotes}
+				p.Strings = append(p.Strings, stringField)
+				p.fields = append(p.fields, stringField)
+			}
+		}
+
 		pts = append(pts, p)
 	}
 
@@ -122,6 +149,15 @@ func loadFieldsMap(fieldsPath string) (map[string]string, error) {
 	return fields, nil
 }
 
+func IsDigitsOnly(s string) bool {
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 func NewPointsFromPath(seriesKeyPath, fieldsPath string, pc lineprotocol.Precision) []lineprotocol.Point {
 	file, err := os.Open(seriesKeyPath)
 	if err != nil {
@@ -139,17 +175,41 @@ func NewPointsFromPath(seriesKeyPath, fieldsPath string, pc lineprotocol.Precisi
 		log.Fatal(err)
 	}
 
-	fields, err := loadFieldsMap(fieldsPath)
+	fieldsMap, err := loadFieldsMap(fieldsPath)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	pts := []lineprotocol.Point{}
 	for _, sk := range series {
-		//ints, floats := generateFieldSet(fields[strings.SplitN(string(sk), ",", 2)[0]])
-		_, floats := generateFieldSet(fields[strings.SplitN(string(sk), ",", 2)[0]])
-		ints := [1]string{"type"}
+		fields := fieldsMap[strings.SplitN(string(sk), ",", 2)[0]]
+		ints, floats := generateFieldSet(fields)
+		s := strings.Split(fields, ",")
 		p := New(sk, ints, floats, pc)
+
+		for _, field := range s {
+			keyValue := strings.Split(field, "=")
+			key := keyValue[0]
+			strValue := keyValue[1]
+
+			if strings.HasSuffix(strValue, "i") {
+				value, _ := strconv.ParseInt(strings.TrimSuffix(strValue, "i"), 10, 64)
+				intField := &lineprotocol.Int{Key: []byte(key), Value: value}
+				p.Ints = append(p.Ints, intField)
+				p.fields = append(p.fields, intField)
+			} else if valid.IsFloat(strValue) {
+				value, _ := strconv.ParseFloat(strValue, 64)
+				floatField := &lineprotocol.Float{Key: []byte(key), Value: value}
+				p.Floats = append(p.Floats, floatField)
+				p.fields = append(p.fields, floatField)
+			} else {
+				strValueWithQuotes := "\"" + strValue + "\""
+				stringField := &lineprotocol.String{Key: []byte(key), Value: strValueWithQuotes}
+				p.Strings = append(p.Strings, stringField)
+				p.fields = append(p.fields, stringField)
+			}
+		}
+
 		pts = append(pts, p)
 	}
 

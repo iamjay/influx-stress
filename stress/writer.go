@@ -113,7 +113,7 @@ WRITE_BATCHES:
 				}
 
 			}
-			pt.Update()
+			//pt.Update()
 		}
 
 		// Avoid timestamp colision when batch size > pts
